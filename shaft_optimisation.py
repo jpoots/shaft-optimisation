@@ -3,17 +3,18 @@ from scipy.optimize import minimize
 
 T = 4955
 L = 1000e-3
-stiffness = 95e9
+shearModulus = 95e9
 maxTwist = math.radians(1.5)
 maxStress = 140e6
 rHole = 15e-3
-youngs = 230e9
 
 
 def stress(radii):
     ri = radii[0]
     ro = radii[1]
     j = J(ri, ro)
+    # holeFactor gives the peak normal stress at the hole edge; the edge is in
+    # uniaxial stress, so the maximum shear stress is half of it
     return 0.5 * T * ro * holeFactor(ri, ro) / j
 
 
@@ -37,7 +38,7 @@ def radiusRatio(ri, ro):
 
 
 def angleOfTwist(radii):
-    return T / (J(radii[0], radii[1]) * stiffness)
+    return T * L / (J(radii[0], radii[1]) * shearModulus)
 
 
 def J(ri, ro):
@@ -56,6 +57,7 @@ constraints = [
     {"type": "ineq", "fun": lambda radii: radii[1] - radii[0] - 5e-3},
     {"type": "ineq", "fun": lambda radii: maxTwist - angleOfTwist(radii)},
     {"type": "ineq", "fun": lambda radii: maxStress - stress(radii)},
+    # validity range of the holeFactor, not design requirements
     {"type": "ineq", "fun": lambda radii: 0.8 - radii[0] / radii[1]},
     {"type": "ineq", "fun": lambda radii: 0.4 - holeRatio(radii[1])},
 ]
@@ -67,6 +69,11 @@ res = minimize(
     constraints=constraints,
 )
 
-print(res.x)
-print("Twist: ", angleOfTwist(res.x))
-print("Stress: ", stress(res.x))
+ri, ro = res.x
+print(f"Converged:      {res.success} ({res.message})")
+print(f"Inner radius:   {ri * 1e3:.2f} mm")
+print(f"Outer radius:   {ro * 1e3:.2f} mm")
+print(f"Wall thickness: {(ro - ri) * 1e3:.2f} mm (min 5 mm)")
+print(f"Cross-section:  {crossSection(res.x) * 1e6:.0f} mm^2")
+print(f"Twist:          {math.degrees(angleOfTwist(res.x)):.3f} deg (max 1.5 deg)")
+print(f"Shear stress:   {stress(res.x) / 1e6:.1f} MPa (max 140 MPa)")
